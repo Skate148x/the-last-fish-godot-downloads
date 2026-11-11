@@ -2,20 +2,20 @@
   "schema": 1,
   "product": "the-last-fish-godot",
   "channel": "godot-test",
-  "version": "trial-0.1.17",
+  "version": "trial-0.1.18",
   "minimum_current": "trial-0.1.3",
   "save_schema": 1,
-  "issued_at": "2026-11-10T23:10:53Z",
-  "expires_at": "2026-11-17T23:10:53Z",
+  "issued_at": "2026-11-11T00:56:40Z",
+  "expires_at": "2026-11-18T00:56:40Z",
   "package": {
-    "size": 54721685,
-    "sha256": "33f11b0d7ec684ad149abf65c590fab167b19be099387b2998295f4c9fdfe9e2",
-    "url": "https://github.com/Skate148x/the-last-fish-godot-downloads/releases/download/trial-0.1.17/TheLastFish-trial-0.1.17.zip",
+    "size": 77003793,
+    "sha256": "1ee1dfbc91977f3d8098324da7234d962dc32e6682f9d57feb3634bb7289f0fb",
+    "url": "https://github.com/Skate148x/the-last-fish-godot-downloads/releases/download/trial-0.1.18/TheLastFish-trial-0.1.18.zip",
     "files": [
       {
         "name": "TheLastFish.exe",
-        "size": 124160120,
-        "sha256": "9a413a6b3ec747d3c7790807b198727612d446174ec592cef7004d305b64b745"
+        "size": 168911568,
+        "sha256": "5fff4f7793fde91629b30e6f93bfeedb3298640cd0c5cf36e6f4fbc3c06073c8"
       }
     ]
   }
