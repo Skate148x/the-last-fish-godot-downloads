@@ -1,0 +1,47 @@
+name: Verify revision45 active feed anonymously
+on:
+  push:
+    paths:
+      - 'channel-v2.json'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check live anonymous feed, every package byte, and preserved legacy
+        shell: python
+        run: |
+          import urllib.request,json,hashlib,time,datetime
+          base="https://raw.githubusercontent.com/Skate148x/the-last-fish-godot-downloads/main/"
+          def get(url):
+           with urllib.request.urlopen(url,timeout=180) as r:return r.read()
+          for attempt in range(30):
+           feed=json.loads(get(base+"channel-v2.json"))
+           if feed.get("version")=="trial-0.1.45":break
+           time.sleep(15)
+          expected=json.loads("{\"schema\":2,\"product\":\"the-last-fish-godot\",\"channel\":\"godot-test\",\"version\":\"trial-0.1.45\",\"minimum_current\":\"trial-0.1.44\",\"save_schema\":1,\"issued_at\":\"2026-11-15T20:09:13Z\",\"expires_at\":\"2026-11-22T20:09:13Z\",\"package\":{\"transport\":\"raw-parts-v2\",\"files\":[{\"name\":\"TheLastFish.exe\",\"size\":410682508,\"sha256\":\"8a69dca376d165edbb10ba2e334bef24380a52b20927467349e728b2cda4d1ae\",\"parts\":[{\"size\":67108864,\"sha256\":\"9aed454cc607996d24212249caffe13c4e76076a4e186c99fe7a074cc8803ff5\"},{\"size\":67108864,\"sha256\":\"8ce267b469036c94c473dc3d53d1b08a4450ef1ce405278d13c2ec95aa5311c4\"},{\"size\":67108864,\"sha256\":\"368ea0c12b47425c7cf36eb877ba008e4fc019c104b9b337cb2443bde745c92e\"},{\"size\":67108864,\"sha256\":\"23a762896a956aab468315bf8501c91614a45d0f4d8a414b423c01bd5a95ed74\"},{\"size\":67108864,\"sha256\":\"589514faa63c3e589d67c2f080a3d431e15069cf744618f2fda020516e2b799c\"},{\"size\":67108864,\"sha256\":\"01c0421e4260f5c20e22e9c14a7ab521928ceb21fcb621b2aaf4992db54f7d79\"},{\"size\":8029324,\"sha256\":\"caed10d66dea05b95966ba3e9de32aa9afe00f8143d77362ee64b95efa7f8b5a\"}]}]}}")
+          for key in ("issued_at","expires_at"):expected[key]=feed[key]
+          assert feed==expected,feed
+          now=datetime.datetime.now(datetime.timezone.utc)
+          issued=datetime.datetime.fromisoformat(feed["issued_at"].replace("Z","+00:00"))
+          expires=datetime.datetime.fromisoformat(feed["expires_at"].replace("Z","+00:00"))
+          assert issued<=now<expires and expires-issued<=datetime.timedelta(days=7)
+          legacy=get(base+"channel.json")
+          assert hashlib.sha1(b"blob "+str(len(legacy)).encode()+b"\0"+legacy).hexdigest()=="0b9b35800c09b5138fed299fd8b66f535a3b2195"
+          package=feed["package"]["files"][0];h=hashlib.sha256();total=0
+          for i,p in enumerate(package["parts"]):
+           b=get(f"https://github.com/Skate148x/the-last-fish-godot-downloads/releases/download/trial-0.1.45/TheLastFish.exe.part-{i:04d}")
+           assert len(b)==p["size"] and hashlib.sha256(b).hexdigest()==p["sha256"]
+           h.update(b);total+=len(b)
+          assert total==package["size"] and h.hexdigest()==package["sha256"]
+          rollback=json.loads(get("https://api.github.com/repos/Skate148x/the-last-fish-godot-downloads/releases/tags/trial-0.1.44"))
+          assert rollback["id"]==446266370 and not rollback["draft"] and len(rollback["assets"])==7
+          oldparts=json.loads("[{\"size\":67108864,\"sha256\":\"9aed454cc607996d24212249caffe13c4e76076a4e186c99fe7a074cc8803ff5\"},{\"size\":67108864,\"sha256\":\"11e885e1e0d1559c52990787bb1c27c6006d1bd6f2b6ab469977fab7bd754ac0\"},{\"size\":67108864,\"sha256\":\"368ea0c12b47425c7cf36eb877ba008e4fc019c104b9b337cb2443bde745c92e\"},{\"size\":67108864,\"sha256\":\"23a762896a956aab468315bf8501c91614a45d0f4d8a414b423c01bd5a95ed74\"},{\"size\":67108864,\"sha256\":\"589514faa63c3e589d67c2f080a3d431e15069cf744618f2fda020516e2b799c\"},{\"size\":67108864,\"sha256\":\"01c0421e4260f5c20e22e9c14a7ab521928ceb21fcb621b2aaf4992db54f7d79\"},{\"size\":8029324,\"sha256\":\"eb7b1bfaad6ad99ae35d552f902a0e6a6269f6754f08c75673fb2fe0ca1b7aed\"}]")
+          for i,p in enumerate(oldparts):
+           a=next(a for a in rollback["assets"] if a["name"]==f"TheLastFish.exe.part-{i:04d}")
+           assert a["size"]==p["size"] and a["digest"]=="sha256:"+p["sha256"]
+          print("ANONYMOUS_ACTIVE_FEED_AND_ALL_PARTS_VERIFIED",feed["version"],total,h.hexdigest())
+          print("LEGACY42_BYTES_UNCHANGED_ROLLBACK44_ASSETS_INTACT")
+          print(json.dumps(feed))
