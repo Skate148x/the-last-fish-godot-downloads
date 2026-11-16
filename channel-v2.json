@@ -2,18 +2,18 @@
   "schema": 2,
   "product": "the-last-fish-godot",
   "channel": "godot-test",
-  "version": "trial-0.1.44",
-  "minimum_current": "trial-0.1.43",
+  "version": "trial-0.1.45",
+  "minimum_current": "trial-0.1.44",
   "save_schema": 1,
-  "issued_at": "2026-11-15T20:09:13Z",
-  "expires_at": "2026-11-22T20:09:13Z",
+  "issued_at": "2026-11-16T21:39:36Z",
+  "expires_at": "2026-11-23T21:39:36Z",
   "package": {
     "transport": "raw-parts-v2",
     "files": [
       {
         "name": "TheLastFish.exe",
         "size": 410682508,
-        "sha256": "73f50bddde8c5cf4dfc0ad828b821062e11f91800c41e5e27dc9a0c79c987ff3",
+        "sha256": "8a69dca376d165edbb10ba2e334bef24380a52b20927467349e728b2cda4d1ae",
         "parts": [
           {
             "size": 67108864,
@@ -21,7 +21,7 @@
           },
           {
             "size": 67108864,
-            "sha256": "11e885e1e0d1559c52990787bb1c27c6006d1bd6f2b6ab469977fab7bd754ac0"
+            "sha256": "8ce267b469036c94c473dc3d53d1b08a4450ef1ce405278d13c2ec95aa5311c4"
           },
           {
             "size": 67108864,
@@ -41,7 +41,7 @@
           },
           {
             "size": 8029324,
-            "sha256": "eb7b1bfaad6ad99ae35d552f902a0e6a6269f6754f08c75673fb2fe0ca1b7aed"
+            "sha256": "caed10d66dea05b95966ba3e9de32aa9afe00f8143d77362ee64b95efa7f8b5a"
           }
         ]
       }
