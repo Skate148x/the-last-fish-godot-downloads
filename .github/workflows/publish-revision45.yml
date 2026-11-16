@@ -1,0 +1,151 @@
+name: Publish exact metadata-only revision45
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-revision45.yml'
+permissions:
+  contents: write
+concurrency:
+  group: publish-revision45
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'Skate148x/the-last-fish-godot-downloads'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Reproduce privately tested bytes from pinned public revision44
+        shell: python
+        run: |
+          """Bounded PCK-v3 reader for pinned launcher inputs; explicit checks also under -O."""
+          import hashlib, struct
+          from pathlib import PurePosixPath
+          
+          def readpack(path,embedded=False):
+           b=path.read_bytes()
+           def need(ok,message):
+            if not ok:raise ValueError(message)
+           need(len(b)>=128,'Pack too short')
+           start=0
+           if embedded:
+            size,magic=struct.unpack_from('<QI',b,len(b)-12)
+            need(magic==0x43504447 and 128<=size<=len(b)-12,'Invalid pack footer')
+            start=len(b)-12-size
+           end=len(b)-12 if embedded else len(b)
+           magic,fmt,maj,minor,patch,flags,base,d=struct.unpack_from('<6I2Q',b,start)
+           need((magic,fmt,maj,minor,patch,flags)==(0x43504447,3,4,6,3,2),'Unexpected pack format')
+           need(128<=d and 128<=base and start+base<=end and start+d+4<=end,'Invalid pack directory')
+           pos=start+d;count=struct.unpack_from('<I',b,pos)[0];pos+=4
+           need(0<count<=10000,'Invalid resource count');out={};ranges=[]
+           for _ in range(count):
+            need(pos+4<=end,'Truncated resource directory');length=struct.unpack_from('<I',b,pos)[0];pos+=4
+            need(0<length<=4096 and pos+length+36<=end,'Invalid name size')
+            name=b[pos:pos+length].rstrip(b'\0').decode('utf8');pos+=length
+            need(name and not name.startswith('/') and '\\' not in name and '\0' not in name and ':' not in name and all(x not in ('','.','..') and not x.endswith((' ','.')) for x in name.split('/')) and name not in out,'Unsafe resource name')
+            offset,size=struct.unpack_from('<QQ',b,pos);pos+=16;md=b[pos:pos+16];pos+=16;flag=struct.unpack_from('<I',b,pos)[0];pos+=4
+            begin=start+base+offset;finish=begin+size
+            need(flag==0 and finish<=end,'Invalid resource bounds/flags')
+            need(all(finish<=a or begin>=z for a,z in ranges),'Overlapping resources');ranges.append((begin,finish))
+            data=b[begin:finish];need(hashlib.md5(data).digest()==md,'Resource hash mismatch');out[name]=data
+           for begin,finish in ranges:need(finish<=start+d or begin>=pos,'Resource overlaps directory')
+           return out
+          
+          import os,json
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])
+          source=Path("baseline.exe")
+          import urllib.request
+          baseline=bytearray()
+          for i in range(7):
+           url=f"https://github.com/Skate148x/the-last-fish-godot-downloads/releases/download/trial-0.1.44/TheLastFish.exe.part-{i:04d}"
+           with urllib.request.urlopen(url,timeout=120) as r:baseline.extend(r.read())
+          source.write_bytes(baseline)
+          del baseline
+          original=source.read_bytes()
+          assert len(original)==410682508 and hashlib.sha256(original).hexdigest()=="73f50bddde8c5cf4dfc0ad828b821062e11f91800c41e5e27dc9a0c79c987ff3"
+          before=readpack(source,True)
+          assert before["version.txt"].strip()==b"trial-0.1.44"
+          data=bytearray(original)
+          size,magic=struct.unpack_from("<QI",data,len(data)-12)
+          start=len(data)-12-size
+          _,_,_,_,_,_,base,d=struct.unpack_from("<6I2Q",data,start)
+          pos=start+d;count=struct.unpack_from("<I",data,pos)[0];pos+=4
+          patched=False;changed_ranges=[]
+          for _ in range(count):
+           length=struct.unpack_from("<I",data,pos)[0];pos+=4
+           name=bytes(data[pos:pos+length]).rstrip(b"\0").decode();pos+=length
+           offset,n=struct.unpack_from("<QQ",data,pos);pos+=16
+           checksum=pos;pos+=20
+           if name=="version.txt":
+            begin=start+base+offset
+            old=bytes(data[begin:begin+n]);new=old.replace(b"trial-0.1.44",b"trial-0.1.45")
+            assert old.count(b"trial-0.1.44")==1 and len(old)==len(new)
+            data[begin:begin+n]=new;data[checksum:checksum+16]=hashlib.md5(new).digest()
+            changed_ranges=[(begin,begin+n),(checksum,checksum+16)];patched=True
+          assert patched
+          out=Path("artifacts");out.mkdir()
+          candidate=out/"TheLastFish.exe";candidate.write_bytes(data)
+          after=readpack(candidate,True)
+          assert before.keys()==after.keys()
+          changed=[k for k in before if before[k]!=after[k]]
+          assert changed==["version.txt"],changed
+          assert after["version.txt"].strip()==b"trial-0.1.45"
+          cursor=0
+          for lo,hi in sorted(changed_ranges):
+           assert original[cursor:lo]==data[cursor:lo]
+           cursor=hi
+          assert original[cursor:]==data[cursor:]
+          parts=[]
+          for i,offset in enumerate(range(0,len(data),67108864)):
+           chunk=data[offset:offset+67108864];name=f"TheLastFish.exe.part-{i:04d}"
+           (out/name).write_bytes(chunk)
+           parts.append({"name":name,"size":len(chunk),"sha256":hashlib.sha256(chunk).hexdigest()})
+          evidence={"source_version":"trial-0.1.44","version":"trial-0.1.45","source_sha256":hashlib.sha256(original).hexdigest(),"sha256":hashlib.sha256(data).hexdigest(),"size":len(data),"resource_count":len(before),"changed_resources":changed,"all_other_resources_identical":True,"byte_diff_count":sum(sum(a!=b for a,b in zip(original[lo:hi],data[lo:hi])) for lo,hi in changed_ranges),"parts":parts,"feed_changed":False}
+          (out/"candidate-evidence.json").write_text(json.dumps(evidence,indent=2))
+          print(json.dumps(evidence,indent=2))
+          assert evidence["sha256"]=="8a69dca376d165edbb10ba2e334bef24380a52b20927467349e728b2cda4d1ae"
+          assert evidence["byte_diff_count"]==17
+      - name: Publish seven exact parts and verify anonymous downloads
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import os,json,hashlib,urllib.request,urllib.error,time
+          from pathlib import Path
+          repo="Skate148x/the-last-fish-godot-downloads"
+          base="https://api.github.com/repos/"+repo
+          token=os.environ["GH_TOKEN"]
+          def api(url,method="GET",data=None,binary=False):
+           body=data if binary else (json.dumps(data).encode() if data is not None else None)
+           req=urllib.request.Request(url,data=body,method=method,headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","Content-Type":"application/octet-stream" if binary else "application/json"})
+           with urllib.request.urlopen(req,timeout=180) as r:return json.load(r)
+          e=json.loads(Path("artifacts/candidate-evidence.json").read_text())
+          try:
+           existing=api(base+"/releases/tags/trial-0.1.45")
+           raise RuntimeError("Revision45 already exists; refuse overwrite")
+          except urllib.error.HTTPError as err:
+           if err.code!=404:raise
+          release=api(base+"/releases","POST",{"tag_name":"trial-0.1.45","target_commitish":os.environ["GITHUB_SHA"],"name":"The Last Fish updater test (revision 45)","body":"","draft":True,"prerelease":True})
+          for part in e["parts"]:
+           b=Path("artifacts",part["name"]).read_bytes()
+           assert len(b)==part["size"] and hashlib.sha256(b).hexdigest()==part["sha256"]
+           asset=api(release["upload_url"].split("{")[0]+"?name="+part["name"],"POST",b,True)
+           assert asset["state"]=="uploaded" and asset["size"]==part["size"] and asset["digest"]=="sha256:"+part["sha256"]
+          published=api(release["url"],"PATCH",{"draft":False,"make_latest":"false"})
+          assert not published["draft"]
+          full=hashlib.sha256();total=0
+          for part in e["parts"]:
+           url=f"https://github.com/{repo}/releases/download/trial-0.1.45/{part['name']}"
+           for attempt in range(5):
+            try:
+             with urllib.request.urlopen(url,timeout=180) as r:b=r.read()
+             break
+            except urllib.error.HTTPError:
+             if attempt==4:raise
+             time.sleep(10)
+           assert len(b)==part["size"] and hashlib.sha256(b).hexdigest()==part["sha256"]
+           full.update(b);total+=len(b)
+           print("ANONYMOUS_PART_VERIFIED",part["name"],len(b),part["sha256"])
+          assert total==e["size"] and full.hexdigest()==e["sha256"]
+          print("ANONYMOUS_COMPLETE_VERIFIED",total,full.hexdigest(),"release",published["id"])
+          print("FEED_UNCHANGED")
